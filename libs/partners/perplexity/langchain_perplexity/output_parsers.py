@@ -61,6 +61,9 @@ class ReasoningJsonOutputParser(JsonOutputParser):
         """
         text = result[0].text
         text = strip_think_tags(text)
+        if partial and text.startswith("<think>"):
+            # Reasoning block is still streaming; JSON inside it is not the answer.
+            return None
         return super().parse_result([Generation(text=text)], partial=partial)
 
 
@@ -85,4 +88,7 @@ class ReasoningStructuredOutputParser(
         """
         text = result[0].text
         text = strip_think_tags(text)
+        if partial and text.startswith("<think>"):
+            # Reasoning block is still streaming; JSON inside it is not the answer.
+            return None
         return super().parse_result([Generation(text=text)], partial=partial)

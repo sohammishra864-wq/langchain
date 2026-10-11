@@ -354,3 +354,40 @@ Step 3: Format as JSON
         assert result.name == "Bob Wilson"
         assert result.age == 40
         assert result.email == "bob@example.com"
+
+
+class City(BaseModel):
+    city: str
+
+
+# A draft answer inside the reasoning block that the model later rejects.
+STREAMED_REASONING = (
+    '<think>Draft:\n```json\n{"city": "Paris"}\n```\n'
+    'No, Tokyo fits better.</think>\n{"city": "Tokyo"}'
+)
+
+
+def _chunks(text: str, size: int = 4) -> list[str]:
+    return [text[i : i + size] for i in range(0, len(text), size)]
+
+
+def test_json_parser_stream_ignores_json_inside_unclosed_think() -> None:
+    parser = ReasoningJsonOutputParser()
+    streamed = list(parser.transform(iter(_chunks(STREAMED_REASONING))))
+    assert {"city": "Paris"} not in streamed
+    assert streamed[-1] == {"city": "Tokyo"}
+
+
+def test_structured_parser_stream_ignores_json_inside_unclosed_think() -> None:
+    parser: ReasoningStructuredOutputParser[City] = ReasoningStructuredOutputParser(
+        pydantic_object=City
+    )
+    streamed = list(parser.transform(iter(_chunks(STREAMED_REASONING))))
+    assert City(city="Paris") not in streamed
+    assert streamed[-1] == City(city="Tokyo")
+
+
+def test_partial_parse_returns_none_while_think_is_open() -> None:
+    parser = ReasoningJsonOutputParser()
+    text = '<think>Draft:\n```json\n{"city": "Paris"}\n```'
+    assert parser.parse_result([Generation(text=text)], partial=True) is None
