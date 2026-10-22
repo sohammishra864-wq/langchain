@@ -620,6 +620,59 @@ def test_translate_responses_input_keeps_assistant_text_with_tool_calls() -> Non
     assert translated[1]["call_id"] == "call_1"
 
 
+def test_translate_responses_input_converts_content_blocks() -> None:
+    """List content uses `input_text` / `input_image` parts with string URLs."""
+    translated = _translate_responses_input(
+        [
+            {
+                "role": "user",
+                "content": [
+                    "plain",
+                    {"type": "text", "text": "What's in these images?"},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "https://example.com/a.png"},
+                    },
+                    {"type": "image_url", "image_url": "data:image/png;base64,AAA"},
+                    {"type": "image", "url": "https://example.com/b.png"},
+                    {"type": "image", "base64": "BBB", "mime_type": "image/jpeg"},
+                ],
+            }
+        ]
+    )
+    assert translated == [
+        {
+            "type": "message",
+            "role": "user",
+            "content": [
+                {"type": "input_text", "text": "plain"},
+                {"type": "input_text", "text": "What's in these images?"},
+                {"type": "input_image", "image_url": "https://example.com/a.png"},
+                {"type": "input_image", "image_url": "data:image/png;base64,AAA"},
+                {"type": "input_image", "image_url": "https://example.com/b.png"},
+                {"type": "input_image", "image_url": "data:image/jpeg;base64,BBB"},
+            ],
+        }
+    ]
+
+
+def test_translate_responses_input_leaves_string_content_alone() -> None:
+    """String content and already-typed parts are not rewritten."""
+    part = {"type": "input_text", "text": "hi"}
+    translated = _translate_responses_input(
+        [
+            {"role": "system", "content": "Be concise."},
+            {"role": "user", "content": [part]},
+        ]
+    )
+    assert translated[0] == {
+        "type": "message",
+        "role": "system",
+        "content": "Be concise.",
+    }
+    assert translated[1]["content"] == [part]
+
+
 def test_to_responses_payload_marks_message_items_with_type() -> None:
     """Message items use the SDK's `message` union variant."""
     llm = ChatPerplexity(model="openai/gpt-5", api_key="test")

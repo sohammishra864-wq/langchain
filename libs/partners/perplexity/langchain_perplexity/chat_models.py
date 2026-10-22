@@ -215,6 +215,36 @@ def _content_to_text(content: Any) -> str:
     return ""
 
 
+def _to_responses_content_part(block: Any) -> Any:
+    """Convert a Chat-Completions or LangChain content block into a Responses
+    content part (`input_text` / `input_image` with a plain string URL).
+
+    Blocks with no Responses equivalent pass through unchanged.
+    """
+    if isinstance(block, str):
+        return {"type": "input_text", "text": block}
+    if not isinstance(block, dict):
+        return block
+    block_type = block.get("type")
+    if block_type == "text":
+        return {"type": "input_text", "text": block.get("text", "")}
+    if block_type == "image_url":
+        image_url = block.get("image_url")
+        url = image_url.get("url") if isinstance(image_url, dict) else image_url
+        return {"type": "input_image", "image_url": url}
+    if block_type == "image":
+        if block.get("url"):
+            return {"type": "input_image", "image_url": block["url"]}
+        data = block.get("base64") or block.get("data")
+        if data:
+            mime_type = block.get("mime_type", "image/png")
+            return {
+                "type": "input_image",
+                "image_url": f"data:{mime_type};base64,{data}",
+            }
+    return block
+
+
 def _translate_responses_input(message_dicts: list[dict[str, Any]]) -> list[Any]:
     """Translate Chat-Completions message dicts into Responses-API input items.
 
@@ -278,7 +308,12 @@ def _translate_responses_input(message_dicts: list[dict[str, Any]]) -> list[Any]
                 }
             )
         elif role in {"assistant", "system", "user", "developer"}:
-            translated.append({**message, "type": "message"})
+            item = {**message, "type": "message"}
+            if isinstance(item.get("content"), list):
+                item["content"] = [
+                    _to_responses_content_part(block) for block in item["content"]
+                ]
+            translated.append(item)
         else:
             translated.append(message)
     return translated
